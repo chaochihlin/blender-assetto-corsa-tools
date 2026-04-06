@@ -24,6 +24,7 @@ from .exporter_utils import (
     get_active_material_texture_slot,
 )
 from .kn5_writer import KN5Writer
+from . import profiler
 from ..utils.constants import ASSETTO_CORSA_OBJECTS
 
 
@@ -77,10 +78,11 @@ class NodeWriter(KN5Writer):
         return False
 
     def write(self):
-        self._write_base_node(None, "BlenderFile")
-        for obj in sorted(self.context.blend_data.objects, key=lambda k: len(k.children)):
-            if not obj.parent:
-                self._write_object(obj)
+        with profiler.section("NodeWriter.write [TOTAL]"):
+            self._write_base_node(None, "BlenderFile")
+            for obj in sorted(self.context.blend_data.objects, key=lambda k: len(k.children)):
+                if not obj.parent:
+                    self._write_object(obj)
 
     def _write_object(self, obj):
         if not obj.name.startswith("__"):
@@ -132,8 +134,10 @@ class NodeWriter(KN5Writer):
         self.write_matrix(node_data["transform"])
 
     def _write_mesh_node(self, obj):
-        divided_meshes = self._split_object_by_materials(obj)
-        divided_meshes = self._split_meshes_for_vertex_limit(divided_meshes)
+        with profiler.section("NodeWriter._split_object_by_materials (per obj)"):
+            divided_meshes = self._split_object_by_materials(obj)
+        with profiler.section("NodeWriter._split_meshes_for_vertex_limit (per obj)"):
+            divided_meshes = self._split_meshes_for_vertex_limit(divided_meshes)
         if obj.parent or len(divided_meshes) > 1:
             node_data = {}
             node_data["name"] = obj.name
@@ -148,7 +152,8 @@ class NodeWriter(KN5Writer):
         for node_setting in self.node_settings:
             node_setting.apply_settings_to_node(node_properties)
         for mesh in divided_meshes:
-            self._write_mesh(obj, mesh, node_properties)
+            with profiler.section("NodeWriter._write_mesh (per submesh)"):
+                self._write_mesh(obj, mesh, node_properties)
 
     def _write_node_class(self, node_class):
         self.write_uint(NODE_CLASS[node_class])
@@ -165,14 +170,16 @@ class NodeWriter(KN5Writer):
         if len(mesh.vertices) > 2**16:
             raise Exception(f"Only {2**16} vertices per mesh allowed. ('{obj.name}')")
         self.write_uint(len(mesh.vertices))
-        for vertex in mesh.vertices:
-            self.write_vector3(vertex.co)
-            self.write_vector3(vertex.normal)
-            self.write_vector2(vertex.uv)
-            self.write_vector3(vertex.tangent)
+        with profiler.section("NodeWriter._write_mesh: vertex loop"):
+            for vertex in mesh.vertices:
+                self.write_vector3(vertex.co)
+                self.write_vector3(vertex.normal)
+                self.write_vector2(vertex.uv)
+                self.write_vector3(vertex.tangent)
         self.write_uint(len(mesh.indices))
-        for i in mesh.indices:
-            self.write_ushort(i)
+        with profiler.section("NodeWriter._write_mesh: index loop"):
+            for i in mesh.indices:
+                self.write_ushort(i)
         if mesh.material_id is None:
             self.warnings.append(f"No material to mesh '{obj.name}' assigned")
             self.write_uint(0)
@@ -181,7 +188,8 @@ class NodeWriter(KN5Writer):
         self.write_uint(node_properties.layer) #Layer
         self.write_float(node_properties.lodIn) #LOD In
         self.write_float(node_properties.lodOut) #LOD Out
-        self._write_bounding_sphere(mesh.vertices)
+        with profiler.section("NodeWriter._write_bounding_sphere (per submesh)"):
+            self._write_bounding_sphere(mesh.vertices)
         self.write_bool(node_properties.renderable) #isRenderable
 
     def _write_bounding_sphere(self, vertices):

@@ -16,6 +16,7 @@
 
 from .kn5_writer import KN5Writer
 from .exporter_utils import get_all_texture_nodes
+from . import profiler
 
 
 DDS_HEADER_BYTES = b"DDS"
@@ -29,19 +30,24 @@ class TextureWriter(KN5Writer):
         self.texture_positions = {}
         self.warnings = warnings
         self.context = context
-        self._fill_available_image_textures()
+        with profiler.section("TextureWriter._fill_available_image_textures"):
+            self._fill_available_image_textures()
 
     def write(self):
-        self.write_int(len(self.available_textures))
-        for texture_name, _position in sorted(self.texture_positions.items(), key=lambda k: k[1]):
-            self._write_texture(self.available_textures[texture_name])
+        with profiler.section("TextureWriter.write [TOTAL]"):
+            self.write_int(len(self.available_textures))
+            for texture_name, _position in sorted(self.texture_positions.items(), key=lambda k: k[1]):
+                self._write_texture(self.available_textures[texture_name])
 
     def _write_texture(self, texture):
-        is_active = 1
-        self.write_int(is_active)
-        self.write_string(texture.image.name)
-        image_data = self._get_image_data_from_texture(texture)
-        self.write_blob(image_data)
+        with profiler.section("TextureWriter._write_texture (per texture)"):
+            is_active = 1
+            self.write_int(is_active)
+            self.write_string(texture.image.name)
+            with profiler.section("TextureWriter._get_image_data_from_texture (per texture)"):
+                image_data = self._get_image_data_from_texture(texture)
+            with profiler.section("TextureWriter.write_blob (per texture)"):
+                self.write_blob(image_data)
 
     def _fill_available_image_textures(self):
         self.available_textures = {}

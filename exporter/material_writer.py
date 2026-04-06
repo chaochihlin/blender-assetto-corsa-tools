@@ -22,6 +22,7 @@ from .exporter_utils import (
     get_texture_nodes,
 )
 from .kn5_writer import KN5Writer
+from . import profiler
 
 
 MATERIAL_BLEND_MODE = {
@@ -54,10 +55,11 @@ class MaterialWriter(KN5Writer):
         self._fill_available_materials()
 
     def write(self):
-        self.write_int(len(self.available_materials))
-        for material_name, _position in sorted(self.material_positions.items(), key=lambda k: k[1]):
-            material = self.available_materials[material_name]
-            self._write_material(material)
+        with profiler.section("MaterialWriter.write [TOTAL]"):
+            self.write_int(len(self.available_materials))
+            for material_name, _position in sorted(self.material_positions.items(), key=lambda k: k[1]):
+                material = self.available_materials[material_name]
+                self._write_material(material)
 
     def _write_material(self, material):
         self.write_string(material.name)
