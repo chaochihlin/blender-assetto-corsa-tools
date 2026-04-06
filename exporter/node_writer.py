@@ -242,6 +242,17 @@ class NodeWriter(KN5Writer):
             uv_layer = mesh_copy.uv_layers.active
             matrix = obj.matrix_world
 
+            # Bulk-fetch UVs into a flat array. The original code used
+            # uv_layer.data[loop_index].uv inside the inner loop, which
+            # creates a fresh bpy wrapper per access (~57us each on a
+            # 65k-vertex mesh, ~100x slower than direct float access).
+            # foreach_get pulls the entire layer in a single C call.
+            uvs_flat = None
+            if uv_layer:
+                from array import array
+                uvs_flat = array('f', [0.0]) * (len(mesh_loops) * 2)
+                uv_layer.data.foreach_get('uv', uvs_flat)
+
             if not mesh_copy.materials:
                 raise Exception(f"Object '{obj.name}' has no material assigned")
 
@@ -265,10 +276,8 @@ class NodeWriter(KN5Writer):
                         local_position = matrix @ mesh_vertices[loop.vertex_index].co
                         converted_position = convert_vector3(local_position)
                         converted_normal = convert_vector3(loop.normal)
-                        uv = (0, 0)
-                        if uv_layer:
-                            uv = uv_layer.data[loop_index].uv
-                            uv = (uv[0], -uv[1])
+                        if uvs_flat is not None:
+                            uv = (uvs_flat[loop_index * 2], -uvs_flat[loop_index * 2 + 1])
                         else:
                             uv = self._calculate_uvs(obj, mesh_copy, material_index, local_position)
                         tangent = loop.tangent
@@ -388,20 +397,17 @@ class UvVertex:
         self.hash = None
 
     def __hash__(self):
-        if not self.hash:
-            self.hash = hash(
-                hash(self.co[0]) ^
-                hash(self.co[1]) ^
-                hash(self.co[2]) ^
-                hash(self.normal[0]) ^
-                hash(self.normal[1]) ^
-                hash(self.normal[2]) ^
-                hash(self.uv[0]) ^
-                hash(self.uv[1]) ^
-                hash(self.tangent[0]) ^
-                hash(self.tangent[1]) ^
-                hash(self.tangent[2])
-            )
+        # Original implementation XOR'd 11 component hashes together, which
+        # collides catastrophically for similar floats and degraded dict
+        # insertion to O(n^2) (623s for a 65k-vert mesh in profiling).
+        # Tuple hashing uses Python's mixing function and distributes well.
+        if self.hash is None:
+            self.hash = hash((
+                self.co[0], self.co[1], self.co[2],
+                self.normal[0], self.normal[1], self.normal[2],
+                self.uv[0], self.uv[1],
+                self.tangent[0], self.tangent[1], self.tangent[2],
+            ))
         return self.hash
 
     def __eq__(self, other):
