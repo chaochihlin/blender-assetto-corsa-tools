@@ -57,26 +57,46 @@ def add(name, seconds):
     s["total"] += seconds
 
 
-def report():
-    """Print profile report. No-op when disabled or never started."""
+def _format_report(total_wall):
+    lines = []
+    lines.append("=" * 78)
+    lines.append(f"MOPPIUS EXPORT PROFILE  (wall {total_wall:.2f}s)")
+    lines.append("=" * 78)
+    lines.append(f"{'section':<48s} {'count':>8s} {'total':>10s} {'avg':>10s}")
+    lines.append("-" * 78)
+    rows = sorted(_stats.items(), key=lambda kv: kv[1]["total"], reverse=True)
+    for name, s in rows:
+        avg_ms = (s["total"] / s["count"] * 1000.0) if s["count"] else 0.0
+        lines.append(f"{name:<48s} {s['count']:>8d} {s['total']:>9.3f}s {avg_ms:>8.2f}ms")
+    lines.append("=" * 78)
+    measured = sum(s["total"] for s in _stats.values())
+    unaccounted = total_wall - measured
+    lines.append(f"measured: {measured:.2f}s   unaccounted: {unaccounted:.2f}s")
+    lines.append("=" * 78)
+    return "\n".join(lines)
+
+
+def report(out_path=None):
+    """Print profile report and (optionally) also write to a file.
+
+    out_path defaults to env MOPPIUS_PROFILE_OUT, else None (no file).
+    No-op when disabled or never started.
+    """
     if not _is_enabled():
         return
     if _start_wall is None:
         print("[moppius profiler] report() called before start()")
         return
     total_wall = time.perf_counter() - _start_wall
+    text = _format_report(total_wall)
     print()
-    print("=" * 78)
-    print(f"MOPPIUS EXPORT PROFILE  (wall {total_wall:.2f}s)")
-    print("=" * 78)
-    print(f"{'section':<48s} {'count':>8s} {'total':>10s} {'avg':>10s}")
-    print("-" * 78)
-    rows = sorted(_stats.items(), key=lambda kv: kv[1]["total"], reverse=True)
-    for name, s in rows:
-        avg_ms = (s["total"] / s["count"] * 1000.0) if s["count"] else 0.0
-        print(f"{name:<48s} {s['count']:>8d} {s['total']:>9.3f}s {avg_ms:>8.2f}ms")
-    print("=" * 78)
-    measured = sum(s["total"] for s in _stats.values())
-    unaccounted = total_wall - measured
-    print(f"measured: {measured:.2f}s   unaccounted: {unaccounted:.2f}s")
-    print("=" * 78)
+    print(text)
+    if out_path is None:
+        out_path = os.environ.get("MOPPIUS_PROFILE_OUT")
+    if out_path:
+        try:
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(text + "\n")
+            print(f"[moppius profiler] wrote {out_path}")
+        except Exception as e:
+            print(f"[moppius profiler] failed to write {out_path}: {e}")
