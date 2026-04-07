@@ -58,6 +58,7 @@ class NodeWriter(KN5Writer):
         self.scene = self.context.scene
         self.node_settings = []
         self.ac_objects = []
+        self._allowed_objects = frozenset()
         self._init_assetto_corsa_objects()
         self._init_node_settings()
 
@@ -79,7 +80,7 @@ class NodeWriter(KN5Writer):
 
     def write(self):
         with profiler.section("NodeWriter.write [TOTAL]"):
-            self._allowed_objects = set(self.context.view_layer.objects)
+            self._allowed_objects = frozenset(self.context.view_layer.objects)
             self._write_base_node(None, "BlenderFile")
             for obj in sorted(self._allowed_objects, key=lambda k: len(k.children)):
                 if not obj.parent:
