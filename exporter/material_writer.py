@@ -93,10 +93,15 @@ class MaterialWriter(KN5Writer):
             for material_key in self.settings[MATERIALS]:
                 self.material_settings.append(MaterialSettings(self.settings, self.warnings, material_key))
         position = 0
-        for material in self.context.blend_data.materials:
-            if material.users == 0:
-                self.warnings.append(f"Ignoring unused material '{material.name}'")
-            elif not material.name.startswith("__"):
+        seen = set()
+        for obj in self.context.view_layer.objects:
+            if obj.type != "MESH":
+                continue
+            for slot in obj.material_slots:
+                material = slot.material
+                if material is None or material.name in seen:
+                    continue
+                seen.add(material.name)
                 if not get_active_material_texture_slot(material):
                     warning_message = f"No active texture for material '{material.name}' found.{os.linesep}"
                     warning_message += "\tUsing default UV scaling for objects without UV maps."

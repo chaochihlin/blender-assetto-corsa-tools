@@ -79,20 +79,21 @@ class NodeWriter(KN5Writer):
 
     def write(self):
         with profiler.section("NodeWriter.write [TOTAL]"):
+            self._allowed_objects = set(self.context.view_layer.objects)
             self._write_base_node(None, "BlenderFile")
-            for obj in sorted(self.context.blend_data.objects, key=lambda k: len(k.children)):
+            for obj in sorted(self._allowed_objects, key=lambda k: len(k.children)):
                 if not obj.parent:
                     self._write_object(obj)
 
     def _write_object(self, obj):
-        if not obj.name.startswith("__"):
-            if obj.type == "MESH":
-                if obj.children:
-                    raise Exception(f"A mesh cannot contain children ('{obj.name}')")
-                self._write_mesh_node(obj)
-            else:
-                self._write_base_node(obj, obj.name)
-            for child in obj.children:
+        if obj.type == "MESH":
+            if obj.children:
+                raise Exception(f"A mesh cannot contain children ('{obj.name}')")
+            self._write_mesh_node(obj)
+        else:
+            self._write_base_node(obj, obj.name)
+        for child in obj.children:
+            if child in self._allowed_objects:
                 self._write_object(child)
 
     def _any_child_is_mesh(self, obj):
@@ -107,17 +108,17 @@ class NodeWriter(KN5Writer):
         num_children = 0
         if not obj:
             matrix = Matrix()
-            for obj in self.context.blend_data.objects:
-                if not obj.parent and not obj.name.startswith("__"):
+            for o in self._allowed_objects:
+                if not o.parent:
                     num_children += 1
         else:
             if not self._is_ac_object(obj.name) and not self._any_child_is_mesh(obj):
                 msg = f"Unknown logical object '{obj.name}' might prevent other objects from loading.{os.linesep}"
-                msg += "\tRename it to '__{obj.name}' if you do not want to export it."
+                msg += "\tExclude its collection in the Outliner if you do not want to export it."
                 self.warnings.append(msg)
             matrix = convert_matrix(obj.matrix_local)
             for child in obj.children:
-                if not child.name.startswith("__"):
+                if child in self._allowed_objects:
                     num_children += 1
 
         node_data["name"] = node_name

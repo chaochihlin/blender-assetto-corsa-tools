@@ -54,7 +54,7 @@ def get_texture_nodes(material):
 
 def get_all_texture_nodes(context):
     scene_texture_nodes = []
-    for obj in context.blend_data.objects:
+    for obj in context.view_layer.objects:
         if obj.type != "MESH":
             continue
         for slot in obj.material_slots:

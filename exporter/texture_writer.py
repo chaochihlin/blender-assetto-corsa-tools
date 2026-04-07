@@ -56,15 +56,14 @@ class TextureWriter(KN5Writer):
 
         all_texture_nodes = get_all_texture_nodes(self.context)
         for texture_node in all_texture_nodes:
-            if not texture_node.name.startswith("__"):
-                if not texture_node.image:
-                    self.warnings.append(f"Ignoring texture node without image '{texture_node.name}'")
-                elif not texture_node.image.pixels:
-                    self.warnings.append(f"Ignoring texture node without image data '{texture_node.name}'")
-                else:
-                    self.available_textures[texture_node.image.name] = texture_node
-                    self.texture_positions[texture_node.image.name] = position
-                    position += 1
+            if not texture_node.image:
+                self.warnings.append(f"Ignoring texture node without image '{texture_node.name}'")
+            elif not texture_node.image.pixels:
+                self.warnings.append(f"Ignoring texture node without image data '{texture_node.name}'")
+            else:
+                self.available_textures[texture_node.image.name] = texture_node
+                self.texture_positions[texture_node.image.name] = position
+                position += 1
 
     def _get_image_data_from_texture(self, texture):
         image_copy = texture.image.copy()
