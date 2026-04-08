@@ -16,20 +16,13 @@ import sys
 import os
 import bpy
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _fixtures import find_layer_collection  # noqa: E402
+
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 if len(argv) < 2:
     raise SystemExit("Usage: blender --background --factory-startup --python tests/test_real_exclusion.py -- <input.blend> <out_dir>")
 in_blend, out_dir = argv[0], argv[1]
-
-
-def find_layer_collection(layer_collection, name):
-    if layer_collection.collection.name == name:
-        return layer_collection
-    for child in layer_collection.children:
-        found = find_layer_collection(child, name)
-        if found:
-            return found
-    return None
 
 
 def export(out_path, label):
