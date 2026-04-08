@@ -83,15 +83,20 @@ class KN5FileWriter(KN5Writer):
         self.settings = settings
         self.warnings = warnings
 
-        self.file_version = 5
+        self.file_version = 6
 
     def write(self):
         self._write_header()
         self._write_content()
 
     def _write_header(self):
+        # V6 adds a 4-byte reserved field after the version. V6 is required
+        # for AC physics/collision; V5 KN5 silently fails to spawn cars
+        # (they fall through the floor).
         self.file.write(KN5_HEADER_BYTES)
         self.write_uint(self.file_version)
+        if self.file_version >= 6:
+            self.write_uint(0)
 
     def _write_content(self):
         texture_writer = TextureWriter(self.file, self.context, self.warnings)
